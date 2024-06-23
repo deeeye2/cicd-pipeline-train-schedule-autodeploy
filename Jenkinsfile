@@ -1,10 +1,17 @@
 pipeline {
     agent any
     environment {
-        //be sure to replace "bhavukm" with your own Docker Hub username
-        DOCKER_IMAGE_NAME = "bhavukm/train-schedule"
+        DOCKER_CREDENTIALS_ID = 'docker_hub_login' // Jenkins Docker Hub credentials ID
+        KUBECONFIG_CREDENTIALS_ID = 'kubeconfig' // The ID of the kubeconfig file added to Jenkins
+	//be sure to replace "bhavukm" with your own Docker Hub username
+        DOCKER_IMAGE_NAME = "deeeye2/pipeline-train-schedule"
     }
     stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/deeeye2/cicd-pipeline-train-schedule-autodeploy.git'
+            }
+        }
         stage('Build') {
             steps {
                 echo 'Running build automation'
@@ -31,7 +38,7 @@ pipeline {
             }
             steps {
                 script {
-                    docker.withRegistry('https://registry.hub.docker.com', 'docker_hub_login') {
+                    docker.withRegistry('https://registry.hub.docker.com', 'docker') {
                         app.push("${env.BUILD_NUMBER}")
                         app.push("latest")
                     }
