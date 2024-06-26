@@ -1,15 +1,33 @@
 pipeline {
-    agent any
+    agent { label 'jenkinsslave' }
     environment {
-        DOCKER_CREDENTIALS_ID = 'docker_hub_login' // Jenkins Docker Hub credentials ID
-        KUBECONFIG_CREDENTIALS_ID = 'kubeconfig' // The ID of the kubeconfig file added to Jenkins
-	//be sure to replace "bhavukm" with your own Docker Hub username
+        DOCKER_CREDENTIALS_ID = 'docker_hub_login'
+        SSH_CREDENTIALS_ID = 'kubeconfig'
         DOCKER_IMAGE_NAME = "deeeye2/pipeline-train-schedule"
+        JAVA_HOME = '/usr/lib/jvm/java-11-openjdk-11.0.23.0.9-2.el7_9.x86_64'
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"
     }
     stages {
         stage('Checkout') {
             steps {
-                git 'https://github.com/deeeye2/cicd-pipeline-train-schedule-autodeploy.git'
+                script {
+                    def branch = env.BRANCH_NAME ?: 'master'
+                    echo "Checking out branch: ${branch}"
+                    checkout([$class: 'GitSCM',
+                        branches: [[name: "*/${branch}"]],
+                        userRemoteConfigs: [[url: 'https://github.com/deeeye2/cicd-pipeline-train-schedule-autodeploy.git']]
+                    ])
+                    echo "Checked out branch: ${branch}"
+                }
+            }
+        }
+        stage('Print Branch Info') {
+            steps {
+                script {
+                    def branch = env.BRANCH_NAME ?: 'master'
+                    echo "Branch name: ${branch}"
+                    sh 'env' // Print all environment variables for debugging
+                }
             }
         }
         stage('Build') {
@@ -25,7 +43,7 @@ pipeline {
             }
             steps {
                 script {
-                    app = docker.build(DOCKER_IMAGE_NAME)
+                    def app = docker.build(DOCKER_IMAGE_NAME)
                     app.inside {
                         sh 'echo Hello, World!'
                     }
@@ -38,7 +56,8 @@ pipeline {
             }
             steps {
                 script {
-                    docker.withRegistry('https://registry.hub.docker.com', 'docker') {
+                    docker.withRegistry('https://registry.hub.docker.com', DOCKER_CREDENTIALS_ID) {
+                        def app = docker.image(DOCKER_IMAGE_NAME)
                         app.push("${env.BUILD_NUMBER}")
                         app.push("latest")
                     }
@@ -53,11 +72,11 @@ pipeline {
                 CANARY_REPLICAS = 1
             }
             steps {
-                kubernetesDeploy(
-                    kubeconfigId: 'kubeconfig',
-                    configs: 'train-schedule-kube-canary.yml',
-                    enableConfigSubstitution: true
-                )
+                script {
+                    withCredentials([file(credentialsId: SSH_CREDENTIALS_ID, variable: 'KUBECONFIG')]) {
+                        sh 'kubectl apply -f train-schedule-kube-canary.yml --kubeconfig=$KUBECONFIG'
+                    }
+                }
             }
         }
         stage('DeployToProduction') {
@@ -70,16 +89,12 @@ pipeline {
             steps {
                 input 'Deploy to Production?'
                 milestone(1)
-                kubernetesDeploy(
-                    kubeconfigId: 'kubeconfig',
-                    configs: 'train-schedule-kube-canary.yml',
-                    enableConfigSubstitution: true
-                )
-                kubernetesDeploy(
-                    kubeconfigId: 'kubeconfig',
-                    configs: 'train-schedule-kube.yml',
-                    enableConfigSubstitution: true
-                )
+                script {
+                    withCredentials([file(credentialsId: SSH_CREDENTIALS_ID, variable: 'KUBECONFIG')]) {
+                        sh 'kubectl apply -f train-schedule-kube-canary.yml --kubeconfig=$KUBECONFIG'
+                        sh 'kubectl apply -f train-schedule-kube.yml --kubeconfig=$KUBECONFIG'
+                    }
+                }
             }
         }
     }
