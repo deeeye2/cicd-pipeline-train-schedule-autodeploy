@@ -1,6 +1,6 @@
 ---
-kind: Service
 apiVersion: v1
+kind: Service
 metadata:
   name: train-schedule-service-canary
 spec:
@@ -11,7 +11,8 @@ spec:
   ports:
   - protocol: TCP
     port: 8080
-    nodePort: 8081
+    targetPort: 8080
+    nodePort: 30001
 
 ---
 apiVersion: apps/v1
@@ -21,7 +22,7 @@ metadata:
   labels:
     app: train-schedule
 spec:
-  replicas: 1  # Ensure this is correctly set or replace with an environment variable in your script
+  replicas: 1
   selector:
     matchLabels:
       app: train-schedule
@@ -34,7 +35,7 @@ spec:
     spec:
       containers:
       - name: train-schedule
-        image: deeeye2/pipeline-train-schedule:latest  # Ensure this matches your Docker image tag
+        image: deeeye2/pipeline-train-schedule:latest
         ports:
         - containerPort: 8080
         livenessProbe:
@@ -47,3 +48,8 @@ spec:
         resources:
           requests:
             cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+
