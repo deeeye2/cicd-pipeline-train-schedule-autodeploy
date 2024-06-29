@@ -1,3 +1,4 @@
+---
 kind: Service
 apiVersion: v1
 metadata:
@@ -13,7 +14,6 @@ spec:
     nodePort: 8081
 
 ---
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,7 +21,7 @@ metadata:
   labels:
     app: train-schedule
 spec:
-  replicas: $CANARY_REPLICAS
+  replicas: 1  # Ensure this is correctly set or replace with an environment variable in your script
   selector:
     matchLabels:
       app: train-schedule
@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
       - name: train-schedule
-        image: $DOCKER_IMAGE_NAME:$BUILD_NUMBER
+        image: deeeye2/pipeline-train-schedule:latest  # Ensure this matches your Docker image tag
         ports:
         - containerPort: 8080
         livenessProbe:
